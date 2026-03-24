@@ -1,0 +1,22 @@
+.DS_Store
+
+# Go build outputs
+/worklog
+/bin/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.coverprofile
+coverage.out
+
+# IDE/editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
