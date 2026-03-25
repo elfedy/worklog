@@ -1,12 +1,17 @@
 # Timer CLI
 
-Small Go command-line timer that prints a live countdown and sends a desktop notification when it finishes.
+Small Go command-line timeblock tracker that:
+
+- asks what you want to achieve
+- lets you choose `30`, `45`, `60`, `90`, or a custom number of minutes
+- prints a live countdown
+- sends a desktop notification when the block ends
+- asks what you achieved and saves the session to `~/.worklog/entries/YYYY-MM-DD.json`
 
 ## Usage
 
 ```bash
-go run . start 25m
-go run . start --title "Break over" --message "Back to work." 5m
+go run .
+go build .
+./worklog
 ```
-
-Durations use Go's standard format, for example `10s`, `5m`, or `1h30m`.
