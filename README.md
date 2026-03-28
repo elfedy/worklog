@@ -3,7 +3,9 @@
 Small Go command-line timeblock tracker that:
 
 - asks what you want to achieve
-- lets you choose `30`, `45`, `60`, `90`, or a custom number of minutes
+- reads optional settings from `~/.worklog/config.toml`
+- shows your logged minutes today against your configured daily target
+- lets you choose configured time sets or a custom number of minutes
 - prints a live countdown
 - sends a desktop notification when the block ends
 - asks what the result was and saves the session to `~/.worklog/entries/YYYY-MM-DD.json`
@@ -15,4 +17,20 @@ Small Go command-line timeblock tracker that:
 go run .
 go build .
 ./worklog
+```
+
+## Config
+
+If `~/.worklog/config.toml` does not exist, the CLI uses:
+
+```toml
+minutes_per_day = 180
+time_sets = [30, 60, 90]
+```
+
+Example custom config:
+
+```toml
+minutes_per_day = 240
+time_sets = [25, 50, 75, 100]
 ```

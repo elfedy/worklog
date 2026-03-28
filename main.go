@@ -52,6 +52,51 @@ func (entry *timeblockEntry) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func readEntries(entriesPath string) ([]timeblockEntry, error) {
+	entries := []timeblockEntry{}
+
+	entriesBytes, readErr := os.ReadFile(entriesPath)
+	if readErr == nil && len(strings.TrimSpace(string(entriesBytes))) > 0 {
+		if unmarshalErr := json.Unmarshal(entriesBytes, &entries); unmarshalErr != nil {
+			return nil, unmarshalErr
+		}
+
+		return entries, nil
+	}
+
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return nil, readErr
+	}
+
+	return entries, nil
+}
+
+func saveEntry(worklogDir string, startedAt time.Time, entry timeblockEntry) error {
+	entriesDir := filepath.Join(worklogDir, "entries")
+	if mkdirErr := os.MkdirAll(entriesDir, 0755); mkdirErr != nil {
+		return fmt.Errorf("failed to create %s: %w", entriesDir, mkdirErr)
+	}
+
+	entriesPath := filepath.Join(entriesDir, startedAt.Format("2006-01-02")+".json")
+	entries, readErr := readEntries(entriesPath)
+	if readErr != nil {
+		return fmt.Errorf("failed to read %s: %w", entriesPath, readErr)
+	}
+
+	entries = append(entries, entry)
+
+	encodedEntries, marshalErr := json.MarshalIndent(entries, "", "  ")
+	if marshalErr != nil {
+		return fmt.Errorf("failed to encode entries: %w", marshalErr)
+	}
+
+	if writeErr := os.WriteFile(entriesPath, append(encodedEntries, '\n'), 0644); writeErr != nil {
+		return fmt.Errorf("failed to write %s: %w", entriesPath, writeErr)
+	}
+
+	return nil
+}
+
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 
@@ -70,14 +115,38 @@ func main() {
 		os.Exit(1)
 	}
 
-	durationOptions := []int{25, 30, 45, 60, 90}
+	homeDir, homeErr := os.UserHomeDir()
+	if homeErr != nil {
+		fmt.Fprintf(os.Stderr, "failed to resolve home directory: %v\n", homeErr)
+		os.Exit(1)
+	}
+
+	worklogDir := filepath.Join(homeDir, ".worklog")
+	config, configErr := loadWorklogConfig(worklogDir)
+	if configErr != nil {
+		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", configErr)
+		os.Exit(1)
+	}
+
+	todayEntriesPath := filepath.Join(worklogDir, "entries", time.Now().Format("2006-01-02")+".json")
+	todayEntries, todayEntriesErr := readEntries(todayEntriesPath)
+	if todayEntriesErr != nil {
+		fmt.Fprintf(os.Stderr, "failed to read %s: %v\n", todayEntriesPath, todayEntriesErr)
+		os.Exit(1)
+	}
+
+	todayMinutes := 0
+	for _, entry := range todayEntries {
+		todayMinutes += entry.DurationMinutes
+	}
 
 	fmt.Println()
+	fmt.Printf("Today: %d/%d minutes worked\n", todayMinutes, config.MinutesPerDay)
 	fmt.Println("How long do you want to focus?")
-	for index, minutes := range durationOptions {
+	for index, minutes := range config.TimeSets {
 		fmt.Printf("%d. %d minutes\n", index+1, minutes)
 	}
-	fmt.Printf("%d. Custom\n", len(durationOptions)+1)
+	fmt.Printf("%d. Custom\n", len(config.TimeSets)+1)
 	fmt.Print("Choose an option: ")
 
 	choiceInput, err := reader.ReadString('\n')
@@ -95,10 +164,10 @@ func main() {
 	durationMinutes := 0
 	durationLabel := ""
 
-	if choice >= 1 && choice <= len(durationOptions) {
-		durationMinutes = durationOptions[choice-1]
+	if choice >= 1 && choice <= len(config.TimeSets) {
+		durationMinutes = config.TimeSets[choice-1]
 		durationLabel = fmt.Sprintf("%d minutes", durationMinutes)
-	} else if choice == len(durationOptions)+1 {
+	} else if choice == len(config.TimeSets)+1 {
 		fmt.Print("Enter custom minutes: ")
 
 		customInput, customErr := reader.ReadString('\n')
@@ -121,7 +190,7 @@ func main() {
 		durationMinutes = customMinutes
 		durationLabel = fmt.Sprintf("%d minutes", durationMinutes)
 	} else {
-		fmt.Fprintf(os.Stderr, "choice must be between 1 and %d\n", len(durationOptions)+1)
+		fmt.Fprintf(os.Stderr, "choice must be between 1 and %d\n", len(config.TimeSets)+1)
 		os.Exit(1)
 	}
 
@@ -171,46 +240,9 @@ func main() {
 				EndedAt:         time.Now(),
 			}
 
-			homeDir, homeErr := os.UserHomeDir()
-			if homeErr != nil {
-				fmt.Fprintf(os.Stderr, "failed to resolve home directory: %v\n", homeErr)
-				os.Exit(1)
-			}
-
-			worklogDir := filepath.Join(homeDir, ".worklog")
-			entriesDir := filepath.Join(worklogDir, "entries")
-			mkdirErr := os.MkdirAll(entriesDir, 0755)
-			if mkdirErr != nil {
-				fmt.Fprintf(os.Stderr, "failed to create %s: %v\n", entriesDir, mkdirErr)
-				os.Exit(1)
-			}
-
-			entriesPath := filepath.Join(entriesDir, startedAt.Format("2006-01-02")+".json")
-			entries := []timeblockEntry{}
-
-			entriesBytes, readEntriesErr := os.ReadFile(entriesPath)
-			if readEntriesErr == nil && len(strings.TrimSpace(string(entriesBytes))) > 0 {
-				unmarshalErr := json.Unmarshal(entriesBytes, &entries)
-				if unmarshalErr != nil {
-					fmt.Fprintf(os.Stderr, "failed to parse %s: %v\n", entriesPath, unmarshalErr)
-					os.Exit(1)
-				}
-			} else if readEntriesErr != nil && !os.IsNotExist(readEntriesErr) {
-				fmt.Fprintf(os.Stderr, "failed to read %s: %v\n", entriesPath, readEntriesErr)
-				os.Exit(1)
-			}
-
-			entries = append(entries, entry)
-
-			encodedEntries, marshalErr := json.MarshalIndent(entries, "", "  ")
-			if marshalErr != nil {
-				fmt.Fprintf(os.Stderr, "failed to encode entries: %v\n", marshalErr)
-				os.Exit(1)
-			}
-
-			writeErr := os.WriteFile(entriesPath, append(encodedEntries, '\n'), 0644)
-			if writeErr != nil {
-				fmt.Fprintf(os.Stderr, "failed to write %s: %v\n", entriesPath, writeErr)
+			entriesPath := filepath.Join(worklogDir, "entries", startedAt.Format("2006-01-02")+".json")
+			if saveErr := saveEntry(worklogDir, startedAt, entry); saveErr != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", saveErr)
 				os.Exit(1)
 			}
 
@@ -255,46 +287,9 @@ func main() {
 				EndedAt:         time.Now(),
 			}
 
-			homeDir, homeErr := os.UserHomeDir()
-			if homeErr != nil {
-				fmt.Fprintf(os.Stderr, "failed to resolve home directory: %v\n", homeErr)
-				os.Exit(1)
-			}
-
-			worklogDir := filepath.Join(homeDir, ".worklog")
-			entriesDir := filepath.Join(worklogDir, "entries")
-			mkdirErr := os.MkdirAll(entriesDir, 0755)
-			if mkdirErr != nil {
-				fmt.Fprintf(os.Stderr, "failed to create %s: %v\n", entriesDir, mkdirErr)
-				os.Exit(1)
-			}
-
-			entriesPath := filepath.Join(entriesDir, startedAt.Format("2006-01-02")+".json")
-			entries := []timeblockEntry{}
-
-			entriesBytes, readEntriesErr := os.ReadFile(entriesPath)
-			if readEntriesErr == nil && len(strings.TrimSpace(string(entriesBytes))) > 0 {
-				unmarshalErr := json.Unmarshal(entriesBytes, &entries)
-				if unmarshalErr != nil {
-					fmt.Fprintf(os.Stderr, "failed to parse %s: %v\n", entriesPath, unmarshalErr)
-					os.Exit(1)
-				}
-			} else if readEntriesErr != nil && !os.IsNotExist(readEntriesErr) {
-				fmt.Fprintf(os.Stderr, "failed to read %s: %v\n", entriesPath, readEntriesErr)
-				os.Exit(1)
-			}
-
-			entries = append(entries, entry)
-
-			encodedEntries, marshalErr := json.MarshalIndent(entries, "", "  ")
-			if marshalErr != nil {
-				fmt.Fprintf(os.Stderr, "failed to encode entries: %v\n", marshalErr)
-				os.Exit(1)
-			}
-
-			writeErr := os.WriteFile(entriesPath, append(encodedEntries, '\n'), 0644)
-			if writeErr != nil {
-				fmt.Fprintf(os.Stderr, "failed to write %s: %v\n", entriesPath, writeErr)
+			entriesPath := filepath.Join(worklogDir, "entries", startedAt.Format("2006-01-02")+".json")
+			if saveErr := saveEntry(worklogDir, startedAt, entry); saveErr != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", saveErr)
 				os.Exit(1)
 			}
 
