@@ -24,7 +24,7 @@ go build .
 If `~/.worklog/config.toml` does not exist, the CLI uses:
 
 ```toml
-minutes_per_day = 180
+minutes_per_day = 300
 time_sets = [30, 60, 90]
 ```
 

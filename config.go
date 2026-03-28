@@ -16,7 +16,7 @@ type worklogConfig struct {
 
 func defaultWorklogConfig() worklogConfig {
 	return worklogConfig{
-		MinutesPerDay: 180,
+		MinutesPerDay: 300,
 		TimeSets:      []int{30, 60, 90},
 	}
 }
