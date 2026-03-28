@@ -17,11 +17,39 @@ import (
 
 type timeblockEntry struct {
 	Goal            string    `json:"goal"`
-	Achievement     string    `json:"achievement"`
+	Result          string    `json:"result"`
 	DurationMinutes int       `json:"duration_minutes"`
 	DurationLabel   string    `json:"duration_label"`
 	StartedAt       time.Time `json:"started_at"`
 	EndedAt         time.Time `json:"ended_at"`
+}
+
+func (entry *timeblockEntry) UnmarshalJSON(data []byte) error {
+	type entryJSON struct {
+		Goal            string    `json:"goal"`
+		Result          string    `json:"result"`
+		Achievement     string    `json:"achievement"`
+		DurationMinutes int       `json:"duration_minutes"`
+		DurationLabel   string    `json:"duration_label"`
+		StartedAt       time.Time `json:"started_at"`
+		EndedAt         time.Time `json:"ended_at"`
+	}
+
+	decoded := entryJSON{}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+
+	entry.Goal = decoded.Goal
+	entry.Result = decoded.Result
+	if entry.Result == "" {
+		entry.Result = decoded.Achievement
+	}
+	entry.DurationMinutes = decoded.DurationMinutes
+	entry.DurationLabel = decoded.DurationLabel
+	entry.StartedAt = decoded.StartedAt
+	entry.EndedAt = decoded.EndedAt
+	return nil
 }
 
 func main() {
@@ -122,21 +150,21 @@ func main() {
 			fmt.Println()
 			fmt.Print("Why was this interrupted? ")
 
-			achievement, readErr := reader.ReadString('\n')
+			result, readErr := reader.ReadString('\n')
 			if readErr != nil {
 				fmt.Fprintf(os.Stderr, "failed to read interruption reason: %v\n", readErr)
 				os.Exit(1)
 			}
 
-			achievement = strings.TrimSpace(achievement)
-			if achievement == "" {
+			result = strings.TrimSpace(result)
+			if result == "" {
 				fmt.Fprintln(os.Stderr, "interruption reason cannot be empty")
 				os.Exit(1)
 			}
 
 			entry := timeblockEntry{
 				Goal:            goal,
-				Achievement:     "[INTERRUPTED] " + achievement,
+				Result:          "[INTERRUPTED] " + result,
 				DurationMinutes: durationMinutes,
 				DurationLabel:   durationLabel,
 				StartedAt:       startedAt,
@@ -204,23 +232,23 @@ func main() {
 			}
 
 			fmt.Println()
-			fmt.Print("What did you achieve? ")
+			fmt.Print("What was the result? ")
 
-			achievement, readErr := reader.ReadString('\n')
+			result, readErr := reader.ReadString('\n')
 			if readErr != nil {
-				fmt.Fprintf(os.Stderr, "failed to read achievement: %v\n", readErr)
+				fmt.Fprintf(os.Stderr, "failed to read result: %v\n", readErr)
 				os.Exit(1)
 			}
 
-			achievement = strings.TrimSpace(achievement)
-			if achievement == "" {
-				fmt.Fprintln(os.Stderr, "achievement cannot be empty")
+			result = strings.TrimSpace(result)
+			if result == "" {
+				fmt.Fprintln(os.Stderr, "result cannot be empty")
 				os.Exit(1)
 			}
 
 			entry := timeblockEntry{
 				Goal:            goal,
-				Achievement:     achievement,
+				Result:          result,
 				DurationMinutes: durationMinutes,
 				DurationLabel:   durationLabel,
 				StartedAt:       startedAt,
