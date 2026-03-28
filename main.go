@@ -42,7 +42,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	durationOptions := []int{30, 45, 60, 90}
+	durationOptions := []int{25, 30, 45, 60, 90}
 
 	fmt.Println()
 	fmt.Println("How long do you want to focus?")
@@ -117,8 +117,77 @@ func main() {
 	for {
 		select {
 		case <-interrupts:
-			fmt.Print("\rTimeblock cancelled.                 \n")
-			os.Exit(130)
+			fmt.Print("\rTimeblock interrupted.               \n")
+
+			fmt.Println()
+			fmt.Print("Why was this interrupted? ")
+
+			achievement, readErr := reader.ReadString('\n')
+			if readErr != nil {
+				fmt.Fprintf(os.Stderr, "failed to read interruption reason: %v\n", readErr)
+				os.Exit(1)
+			}
+
+			achievement = strings.TrimSpace(achievement)
+			if achievement == "" {
+				fmt.Fprintln(os.Stderr, "interruption reason cannot be empty")
+				os.Exit(1)
+			}
+
+			entry := timeblockEntry{
+				Goal:            goal,
+				Achievement:     "[INTERRUPTED] " + achievement,
+				DurationMinutes: durationMinutes,
+				DurationLabel:   durationLabel,
+				StartedAt:       startedAt,
+				EndedAt:         time.Now(),
+			}
+
+			homeDir, homeErr := os.UserHomeDir()
+			if homeErr != nil {
+				fmt.Fprintf(os.Stderr, "failed to resolve home directory: %v\n", homeErr)
+				os.Exit(1)
+			}
+
+			worklogDir := filepath.Join(homeDir, ".worklog")
+			entriesDir := filepath.Join(worklogDir, "entries")
+			mkdirErr := os.MkdirAll(entriesDir, 0755)
+			if mkdirErr != nil {
+				fmt.Fprintf(os.Stderr, "failed to create %s: %v\n", entriesDir, mkdirErr)
+				os.Exit(1)
+			}
+
+			entriesPath := filepath.Join(entriesDir, startedAt.Format("2006-01-02")+".json")
+			entries := []timeblockEntry{}
+
+			entriesBytes, readEntriesErr := os.ReadFile(entriesPath)
+			if readEntriesErr == nil && len(strings.TrimSpace(string(entriesBytes))) > 0 {
+				unmarshalErr := json.Unmarshal(entriesBytes, &entries)
+				if unmarshalErr != nil {
+					fmt.Fprintf(os.Stderr, "failed to parse %s: %v\n", entriesPath, unmarshalErr)
+					os.Exit(1)
+				}
+			} else if readEntriesErr != nil && !os.IsNotExist(readEntriesErr) {
+				fmt.Fprintf(os.Stderr, "failed to read %s: %v\n", entriesPath, readEntriesErr)
+				os.Exit(1)
+			}
+
+			entries = append(entries, entry)
+
+			encodedEntries, marshalErr := json.MarshalIndent(entries, "", "  ")
+			if marshalErr != nil {
+				fmt.Fprintf(os.Stderr, "failed to encode entries: %v\n", marshalErr)
+				os.Exit(1)
+			}
+
+			writeErr := os.WriteFile(entriesPath, append(encodedEntries, '\n'), 0644)
+			if writeErr != nil {
+				fmt.Fprintf(os.Stderr, "failed to write %s: %v\n", entriesPath, writeErr)
+				os.Exit(1)
+			}
+
+			fmt.Printf("Saved interrupted entry to %s\n", entriesPath)
+			return
 		case <-ticker.C:
 			remaining := time.Until(endAt).Round(time.Second)
 			if remaining < 0 {
