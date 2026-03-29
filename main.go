@@ -148,13 +148,16 @@ func main() {
 				os.Exit(1)
 			}
 
+			endedAt := time.Now()
+			elapsedMinutes := int(endedAt.Sub(startedAt) / time.Minute)
+
 			entry := timeblockEntry{
 				Goal:            goal,
-				Result:          "[INTERRUPTED] " + result,
-				DurationMinutes: durationMinutes,
-				DurationLabel:   durationLabel,
+				Result:          fmt.Sprintf("[INTERRUPTED %s] %s", durationLabel, result),
+				DurationMinutes: elapsedMinutes,
+				DurationLabel:   fmt.Sprintf("%d minutes", elapsedMinutes),
 				StartedAt:       startedAt,
-				EndedAt:         time.Now(),
+				EndedAt:         endedAt,
 			}
 
 			entriesPath := filepath.Join(worklogDir, "entries", startedAt.Format("2006-01-02")+".json")
