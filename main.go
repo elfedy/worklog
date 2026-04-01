@@ -15,6 +15,38 @@ import (
 )
 
 func main() {
+	if len(os.Args) < 2 {
+		printHelp()
+		return
+	}
+
+	switch os.Args[1] {
+	case "start":
+		runStart()
+	case "status":
+		runStatus()
+	case "help", "-h", "--help":
+		printHelp()
+	default:
+		fmt.Fprintf(os.Stderr, "unknown subcommand %q\n\n", os.Args[1])
+		printHelp()
+		os.Exit(1)
+	}
+}
+
+func printHelp() {
+	fmt.Println("worklog")
+	fmt.Println()
+	fmt.Println("Usage:")
+	fmt.Println("  worklog <command>")
+	fmt.Println()
+	fmt.Println("Available Commands:")
+	fmt.Println("  start   Start a new timeblock")
+	fmt.Println("  status  Show current status")
+	fmt.Println("  help    Show this help menu")
+}
+
+func runStart() {
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("Timeblock")
@@ -215,6 +247,58 @@ func main() {
 
 			fmt.Printf("Saved entry to %s\n", entriesPath)
 			return
+		}
+	}
+}
+
+func runStatus() {
+	homeDir, homeErr := os.UserHomeDir()
+	if homeErr != nil {
+		fmt.Fprintf(os.Stderr, "failed to resolve home directory: %v\n", homeErr)
+		os.Exit(1)
+	}
+
+	worklogDir := filepath.Join(homeDir, ".worklog")
+	config, configErr := loadWorklogConfig(worklogDir)
+	if configErr != nil {
+		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", configErr)
+		os.Exit(1)
+	}
+
+	today := time.Now()
+	todayEntriesPath := filepath.Join(worklogDir, "entries", today.Format("2006-01-02")+".json")
+	todayEntries, todayEntriesErr := readEntries(todayEntriesPath)
+	if todayEntriesErr != nil {
+		fmt.Fprintf(os.Stderr, "failed to read %s: %v\n", todayEntriesPath, todayEntriesErr)
+		os.Exit(1)
+	}
+
+	todayMinutes := 0
+	for _, entry := range todayEntries {
+		todayMinutes += entry.DurationMinutes
+	}
+
+	fmt.Printf("Today: %d/%d minutes worked\n", todayMinutes, config.MinutesPerDay)
+
+	if len(todayEntries) == 0 {
+		fmt.Println("No entries logged today.")
+		return
+	}
+
+	fmt.Println()
+	fmt.Printf("Entries for %s:\n", today.Format("2006-01-02"))
+	for index, entry := range todayEntries {
+		fmt.Printf(
+			"%d. %s-%s | %s | %s\n",
+			index+1,
+			entry.StartedAt.Local().Format("15:04"),
+			entry.EndedAt.Local().Format("15:04"),
+			entry.DurationLabel,
+			entry.Goal,
+		)
+
+		if entry.Result != "" {
+			fmt.Printf("   %s\n", entry.Result)
 		}
 	}
 }

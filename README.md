@@ -14,9 +14,13 @@ Small Go command-line timeblock tracker that:
 ## Usage
 
 ```bash
-go run .
+go run . help
+go run . start
+go run . status
 go build .
-./worklog
+./worklog help
+./worklog start
+./worklog status
 ```
 
 ## Config
