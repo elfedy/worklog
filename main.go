@@ -27,6 +27,8 @@ func main() {
 		runResume()
 	case "status":
 		runStatus()
+	case "summary":
+		runSummary(os.Args[2:])
 	case "help", "-h", "--help":
 		printHelp()
 	default:
@@ -46,6 +48,7 @@ func printHelp() {
 	fmt.Println("  start   Start a new timeblock")
 	fmt.Println("  resume  Resume the last interrupted timeblock")
 	fmt.Println("  status  Show current status")
+	fmt.Println("  summary Show entries for a period or date range, optionally filtered by text")
 	fmt.Println("  help    Show this help menu")
 }
 
@@ -340,16 +343,136 @@ func runStatus() {
 
 	fmt.Println()
 	fmt.Printf("Entries for %s:\n", today.Format("2006-01-02"))
-	for index, entry := range todayEntries {
+	printEntries(todayEntries, false)
+}
+
+func runSummary(args []string) {
+	homeDir, homeErr := os.UserHomeDir()
+	if homeErr != nil {
+		fmt.Fprintf(os.Stderr, "failed to resolve home directory: %v\n", homeErr)
+		os.Exit(1)
+	}
+
+	if len(args) < 1 || len(args) > 3 {
+		fmt.Fprintln(os.Stderr, "usage: worklog summary <week|month|year> [filter] or worklog summary <YYYY-MM-DD> <YYYY-MM-DD> [filter]")
+		os.Exit(1)
+	}
+
+	worklogDir := filepath.Join(homeDir, ".worklog")
+	start, end, label, filter, parseErr := parseSummaryArgs(args, time.Now())
+	if parseErr != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", parseErr)
+		os.Exit(1)
+	}
+
+	allEntries, readErr := readAllEntries(worklogDir)
+	if readErr != nil {
+		fmt.Fprintf(os.Stderr, "failed to read entries: %v\n", readErr)
+		os.Exit(1)
+	}
+
+	entries := filterEntriesByTimeRange(allEntries, start, end)
+	entries = filterEntriesByText(entries, filter)
+	totalMinutes := 0
+	for _, entry := range entries {
+		totalMinutes += entry.DurationMinutes
+	}
+
+	fmt.Printf("Summary for %s\n", label)
+	if filter != "" {
+		fmt.Printf("Filter: %q\n", filter)
+	}
+	fmt.Printf("Total: %d minutes across %d entries\n", totalMinutes, len(entries))
+
+	if len(entries) == 0 {
+		fmt.Println("No entries found for that period.")
+		return
+	}
+
+	fmt.Println()
+	printEntries(entries, true)
+}
+
+func parseSummaryArgs(args []string, now time.Time) (time.Time, time.Time, string, string, error) {
+	location := now.Location()
+
+	period := args[0]
+	switch period {
+	case "week":
+		weekday := int(now.Weekday())
+		if weekday == 0 {
+			weekday = 7
+		}
+
+		start := time.Date(now.Year(), now.Month(), now.Day()-(weekday-1), 0, 0, 0, 0, location)
+		end := start.AddDate(0, 0, 7)
+		filter := ""
+		if len(args) > 1 {
+			filter = args[1]
+		}
+
+		return start, end, fmt.Sprintf("week starting %s", start.Format("2006-01-02")), filter, nil
+	case "month":
+		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, location)
+		end := start.AddDate(0, 1, 0)
+		filter := ""
+		if len(args) > 1 {
+			filter = args[1]
+		}
+
+		return start, end, start.Format("January 2006"), filter, nil
+	case "year":
+		start := time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, location)
+		end := start.AddDate(1, 0, 0)
+		filter := ""
+		if len(args) > 1 {
+			filter = args[1]
+		}
+
+		return start, end, start.Format("2006"), filter, nil
+	}
+
+	start, startErr := time.ParseInLocation("2006-01-02", args[0], location)
+	if startErr != nil {
+		return time.Time{}, time.Time{}, "", "", fmt.Errorf("invalid period %q, expected week, month, year, or two ISO dates", period)
+	}
+
+	if len(args) < 2 {
+		return time.Time{}, time.Time{}, "", "", fmt.Errorf("missing end date, expected worklog summary <YYYY-MM-DD> <YYYY-MM-DD> [filter]")
+	}
+
+	endDate, endErr := time.ParseInLocation("2006-01-02", args[1], location)
+	if endErr != nil {
+		return time.Time{}, time.Time{}, "", "", fmt.Errorf("invalid end date %q, expected YYYY-MM-DD", args[1])
+	}
+
+	if endDate.Before(start) {
+		return time.Time{}, time.Time{}, "", "", fmt.Errorf("end date %s cannot be before start date %s", args[1], args[0])
+	}
+
+	filter := ""
+	if len(args) > 2 {
+		filter = args[2]
+	}
+
+	return start, endDate.AddDate(0, 0, 1), fmt.Sprintf("%s to %s", args[0], args[1]), filter, nil
+}
+
+func printEntries(entries []timeblockEntry, includeDate bool) {
+	for index, entry := range entries {
+		entryHeader := fmt.Sprintf("#%d", index+1)
+		if includeDate {
+			entryHeader = fmt.Sprintf("%s | %s", entryHeader, entry.StartedAt.Local().Format("2006-01-02"))
+		}
+
 		fmt.Printf(
-			"\n#%d\n %s-%s | %s | %s\nresult:\n %s\n",
-			index+1,
+			"\n%s\n %s-%s | %s | %s\nresult:\n %s\n",
+			entryHeader,
 			entry.StartedAt.Local().Format("15:04"),
 			entry.EndedAt.Local().Format("15:04"),
 			entry.DurationLabel,
 			entry.Goal,
 			entry.Result,
 		)
-
 	}
 }

@@ -19,12 +19,26 @@ go run . help
 go run . start
 go run . resume
 go run . status
+go run . summary week
+go run . summary week deploy
+go run . summary 2026-04-01 2026-04-12
+go run . summary 2026-04-01 2026-04-12 deploy
 go build .
 ./worklog help
 ./worklog start
 ./worklog resume
 ./worklog status
+./worklog summary month
+./worklog summary month deploy
+./worklog summary 2026-04-01 2026-04-12
+./worklog summary 2026-04-01 2026-04-12 deploy
 ```
+
+`summary` accepts:
+
+- `week`, `month`, or `year`
+- two inclusive ISO dates in `YYYY-MM-DD` format
+- an optional text filter that matches `goal` or `result`
 
 ## Config
 

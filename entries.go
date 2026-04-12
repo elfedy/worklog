@@ -144,3 +144,34 @@ func lastEntry(worklogDir string) (*timeblockEntry, error) {
 
 	return &allEntries[len(allEntries)-1], nil
 }
+
+func filterEntriesByTimeRange(entries []timeblockEntry, start time.Time, end time.Time) []timeblockEntry {
+	filteredEntries := []timeblockEntry{}
+	for _, entry := range entries {
+		if entry.StartedAt.Before(start) || !entry.StartedAt.Before(end) {
+			continue
+		}
+
+		filteredEntries = append(filteredEntries, entry)
+	}
+
+	return filteredEntries
+}
+
+func filterEntriesByText(entries []timeblockEntry, query string) []timeblockEntry {
+	filteredEntries := []timeblockEntry{}
+	normalizedQuery := strings.ToLower(strings.TrimSpace(query))
+	if normalizedQuery == "" {
+		return entries
+	}
+
+	for _, entry := range entries {
+		if !strings.Contains(strings.ToLower(entry.Goal), normalizedQuery) && !strings.Contains(strings.ToLower(entry.Result), normalizedQuery) {
+			continue
+		}
+
+		filteredEntries = append(filteredEntries, entry)
+	}
+
+	return filteredEntries
+}
