@@ -1,4 +1,4 @@
-# Timer CLI
+# Worklog 
 
 Small Go command-line timeblock tracker that:
 
