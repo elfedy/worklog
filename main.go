@@ -69,8 +69,9 @@ func runStart() {
 		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", configErr)
 		os.Exit(1)
 	}
+	entriesDir := resolveEntriesDir(worklogDir, config)
 
-	todayEntriesPath := filepath.Join(worklogDir, "entries", time.Now().Format("2006-01-02")+".json")
+	todayEntriesPath := filepath.Join(entriesDir, time.Now().Format("2006-01-02")+".json")
 	todayEntries, todayEntriesErr := readEntries(todayEntriesPath)
 	if todayEntriesErr != nil {
 		fmt.Fprintf(os.Stderr, "failed to read %s: %v\n", todayEntriesPath, todayEntriesErr)
@@ -146,7 +147,7 @@ func runStart() {
 		os.Exit(1)
 	}
 
-	runTimeblock(reader, worklogDir, goal, durationMinutes)
+	runTimeblock(reader, entriesDir, goal, durationMinutes)
 }
 
 func runResume() {
@@ -159,7 +160,13 @@ func runResume() {
 	}
 
 	worklogDir := filepath.Join(homeDir, ".worklog")
-	entry, entryErr := lastEntry(worklogDir)
+	config, configErr := loadWorklogConfig(worklogDir)
+	if configErr != nil {
+		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", configErr)
+		os.Exit(1)
+	}
+	entriesDir := resolveEntriesDir(worklogDir, config)
+	entry, entryErr := lastEntry(entriesDir)
 	if entryErr != nil {
 		fmt.Fprintf(os.Stderr, "failed to read last entry: %v\n", entryErr)
 		os.Exit(1)
@@ -190,10 +197,10 @@ func runResume() {
 	fmt.Printf("Goal: %s\n", entry.Goal)
 	fmt.Printf("Remaining: %d minutes\n", remainingMinutes)
 
-	runTimeblock(reader, worklogDir, entry.Goal, remainingMinutes)
+	runTimeblock(reader, entriesDir, entry.Goal, remainingMinutes)
 }
 
-func runTimeblock(reader *bufio.Reader, worklogDir string, goal string, durationMinutes int) {
+func runTimeblock(reader *bufio.Reader, entriesDir string, goal string, durationMinutes int) {
 	durationLabel := fmt.Sprintf("%d minutes", durationMinutes)
 	duration := time.Duration(durationMinutes) * time.Minute
 	startedAt := time.Now()
@@ -246,8 +253,8 @@ func runTimeblock(reader *bufio.Reader, worklogDir string, goal string, duration
 				EndedAt:                endedAt,
 			}
 
-			entriesPath := filepath.Join(worklogDir, "entries", startedAt.Format("2006-01-02")+".json")
-			if saveErr := saveEntry(worklogDir, startedAt, entry); saveErr != nil {
+			entriesPath := filepath.Join(entriesDir, startedAt.Format("2006-01-02")+".json")
+			if saveErr := saveEntry(entriesDir, startedAt, entry); saveErr != nil {
 				fmt.Fprintf(os.Stderr, "%v\n", saveErr)
 				os.Exit(1)
 			}
@@ -295,8 +302,8 @@ func runTimeblock(reader *bufio.Reader, worklogDir string, goal string, duration
 				EndedAt:                time.Now(),
 			}
 
-			entriesPath := filepath.Join(worklogDir, "entries", startedAt.Format("2006-01-02")+".json")
-			if saveErr := saveEntry(worklogDir, startedAt, entry); saveErr != nil {
+			entriesPath := filepath.Join(entriesDir, startedAt.Format("2006-01-02")+".json")
+			if saveErr := saveEntry(entriesDir, startedAt, entry); saveErr != nil {
 				fmt.Fprintf(os.Stderr, "%v\n", saveErr)
 				os.Exit(1)
 			}
@@ -320,9 +327,10 @@ func runStatus() {
 		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", configErr)
 		os.Exit(1)
 	}
+	entriesDir := resolveEntriesDir(worklogDir, config)
 
 	today := time.Now()
-	todayEntriesPath := filepath.Join(worklogDir, "entries", today.Format("2006-01-02")+".json")
+	todayEntriesPath := filepath.Join(entriesDir, today.Format("2006-01-02")+".json")
 	todayEntries, todayEntriesErr := readEntries(todayEntriesPath)
 	if todayEntriesErr != nil {
 		fmt.Fprintf(os.Stderr, "failed to read %s: %v\n", todayEntriesPath, todayEntriesErr)
@@ -359,13 +367,19 @@ func runSummary(args []string) {
 	}
 
 	worklogDir := filepath.Join(homeDir, ".worklog")
+	config, configErr := loadWorklogConfig(worklogDir)
+	if configErr != nil {
+		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", configErr)
+		os.Exit(1)
+	}
+	entriesDir := resolveEntriesDir(worklogDir, config)
 	start, end, label, filter, parseErr := parseSummaryArgs(args, time.Now())
 	if parseErr != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", parseErr)
 		os.Exit(1)
 	}
 
-	allEntries, readErr := readAllEntries(worklogDir)
+	allEntries, readErr := readAllEntries(entriesDir)
 	if readErr != nil {
 		fmt.Fprintf(os.Stderr, "failed to read entries: %v\n", readErr)
 		os.Exit(1)

@@ -10,14 +10,16 @@ import (
 )
 
 type worklogConfig struct {
-	MinutesPerDay int   `toml:"minutes_per_day"`
-	TimeSets      []int `toml:"time_sets"`
+	MinutesPerDay int    `toml:"minutes_per_day"`
+	TimeSets      []int  `toml:"time_sets"`
+	EntriesDir    string `toml:"entries_dir"`
 }
 
 func defaultWorklogConfig() worklogConfig {
 	return worklogConfig{
 		MinutesPerDay: 300,
 		TimeSets:      []int{30, 60, 90},
+		EntriesDir:    "entries",
 	}
 }
 
@@ -67,5 +69,17 @@ func loadWorklogConfig(worklogDir string) (worklogConfig, error) {
 		config.TimeSets = timeSets
 	}
 
+	if parsed.EntriesDir != "" {
+		config.EntriesDir = parsed.EntriesDir
+	}
+
 	return config, nil
+}
+
+func resolveEntriesDir(worklogDir string, config worklogConfig) string {
+	if filepath.IsAbs(config.EntriesDir) {
+		return config.EntriesDir
+	}
+
+	return filepath.Join(worklogDir, config.EntriesDir)
 }

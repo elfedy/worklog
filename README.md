@@ -8,7 +8,7 @@ Small Go command-line timeblock tracker that:
 - lets you choose configured time sets or a custom number of minutes
 - prints a live countdown
 - sends a desktop notification when the block ends
-- asks what the result was and saves the session to `~/.worklog/entries/YYYY-MM-DD.json`
+- asks what the result was and saves the session to the configured entries directory as `YYYY-MM-DD.json`
 - if interrupted, asks why and saves the session with interruption metadata for later resume
 - can resume the most recent interrupted timeblock using the saved goal and remaining minutes
 
@@ -47,6 +47,7 @@ If `~/.worklog/config.toml` does not exist, the CLI uses:
 ```toml
 minutes_per_day = 300
 time_sets = [30, 60, 90]
+entries_dir = "entries"
 ```
 
 Example custom config:
@@ -54,4 +55,7 @@ Example custom config:
 ```toml
 minutes_per_day = 240
 time_sets = [25, 50, 75, 100]
+entries_dir = "/path/to/worklog-entries"
 ```
+
+`entries_dir` is optional. If it is a relative path, it is resolved relative to `~/.worklog`. If it is absolute, it is used as-is.

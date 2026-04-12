@@ -75,8 +75,7 @@ func readEntries(entriesPath string) ([]timeblockEntry, error) {
 	return entries, nil
 }
 
-func saveEntry(worklogDir string, startedAt time.Time, entry timeblockEntry) error {
-	entriesDir := filepath.Join(worklogDir, "entries")
+func saveEntry(entriesDir string, startedAt time.Time, entry timeblockEntry) error {
 	if mkdirErr := os.MkdirAll(entriesDir, 0755); mkdirErr != nil {
 		return fmt.Errorf("failed to create %s: %w", entriesDir, mkdirErr)
 	}
@@ -101,8 +100,7 @@ func saveEntry(worklogDir string, startedAt time.Time, entry timeblockEntry) err
 	return nil
 }
 
-func readAllEntries(worklogDir string) ([]timeblockEntry, error) {
-	entriesDir := filepath.Join(worklogDir, "entries")
+func readAllEntries(entriesDir string) ([]timeblockEntry, error) {
 	entryPaths, globErr := filepath.Glob(filepath.Join(entriesDir, "*.json"))
 	if globErr != nil {
 		return nil, fmt.Errorf("failed to list %s: %w", entriesDir, globErr)
@@ -132,8 +130,8 @@ func readAllEntries(worklogDir string) ([]timeblockEntry, error) {
 	return allEntries, nil
 }
 
-func lastEntry(worklogDir string) (*timeblockEntry, error) {
-	allEntries, readErr := readAllEntries(worklogDir)
+func lastEntry(entriesDir string) (*timeblockEntry, error) {
+	allEntries, readErr := readAllEntries(entriesDir)
 	if readErr != nil {
 		return nil, readErr
 	}
