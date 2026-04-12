@@ -5,28 +5,33 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
 
 type timeblockEntry struct {
-	Goal            string    `json:"goal"`
-	Result          string    `json:"result"`
-	DurationMinutes int       `json:"duration_minutes"`
-	DurationLabel   string    `json:"duration_label"`
-	StartedAt       time.Time `json:"started_at"`
-	EndedAt         time.Time `json:"ended_at"`
+	Goal                   string    `json:"goal"`
+	Result                 string    `json:"result"`
+	Interrupted            bool      `json:"interrupted"`
+	PlannedDurationMinutes int       `json:"planned_duration_minutes,omitempty"`
+	DurationMinutes        int       `json:"duration_minutes"`
+	DurationLabel          string    `json:"duration_label"`
+	StartedAt              time.Time `json:"started_at"`
+	EndedAt                time.Time `json:"ended_at"`
 }
 
 func (entry *timeblockEntry) UnmarshalJSON(data []byte) error {
 	type entryJSON struct {
-		Goal            string    `json:"goal"`
-		Result          string    `json:"result"`
-		Achievement     string    `json:"achievement"`
-		DurationMinutes int       `json:"duration_minutes"`
-		DurationLabel   string    `json:"duration_label"`
-		StartedAt       time.Time `json:"started_at"`
-		EndedAt         time.Time `json:"ended_at"`
+		Goal                   string    `json:"goal"`
+		Result                 string    `json:"result"`
+		Achievement            string    `json:"achievement"`
+		Interrupted            *bool     `json:"interrupted"`
+		PlannedDurationMinutes int       `json:"planned_duration_minutes"`
+		DurationMinutes        int       `json:"duration_minutes"`
+		DurationLabel          string    `json:"duration_label"`
+		StartedAt              time.Time `json:"started_at"`
+		EndedAt                time.Time `json:"ended_at"`
 	}
 
 	decoded := entryJSON{}
@@ -39,6 +44,11 @@ func (entry *timeblockEntry) UnmarshalJSON(data []byte) error {
 	if entry.Result == "" {
 		entry.Result = decoded.Achievement
 	}
+	entry.Interrupted = false
+	if decoded.Interrupted != nil {
+		entry.Interrupted = *decoded.Interrupted
+	}
+	entry.PlannedDurationMinutes = decoded.PlannedDurationMinutes
 	entry.DurationMinutes = decoded.DurationMinutes
 	entry.DurationLabel = decoded.DurationLabel
 	entry.StartedAt = decoded.StartedAt
@@ -89,4 +99,48 @@ func saveEntry(worklogDir string, startedAt time.Time, entry timeblockEntry) err
 	}
 
 	return nil
+}
+
+func readAllEntries(worklogDir string) ([]timeblockEntry, error) {
+	entriesDir := filepath.Join(worklogDir, "entries")
+	entryPaths, globErr := filepath.Glob(filepath.Join(entriesDir, "*.json"))
+	if globErr != nil {
+		return nil, fmt.Errorf("failed to list %s: %w", entriesDir, globErr)
+	}
+
+	allEntries := []timeblockEntry{}
+	for _, entryPath := range entryPaths {
+		entries, readErr := readEntries(entryPath)
+		if readErr != nil {
+			return nil, fmt.Errorf("failed to read %s: %w", entryPath, readErr)
+		}
+
+		allEntries = append(allEntries, entries...)
+	}
+
+	sort.Slice(allEntries, func(leftIndex int, rightIndex int) bool {
+		leftEntry := allEntries[leftIndex]
+		rightEntry := allEntries[rightIndex]
+
+		if leftEntry.EndedAt.Equal(rightEntry.EndedAt) {
+			return leftEntry.StartedAt.Before(rightEntry.StartedAt)
+		}
+
+		return leftEntry.EndedAt.Before(rightEntry.EndedAt)
+	})
+
+	return allEntries, nil
+}
+
+func lastEntry(worklogDir string) (*timeblockEntry, error) {
+	allEntries, readErr := readAllEntries(worklogDir)
+	if readErr != nil {
+		return nil, readErr
+	}
+
+	if len(allEntries) == 0 {
+		return nil, nil
+	}
+
+	return &allEntries[len(allEntries)-1], nil
 }

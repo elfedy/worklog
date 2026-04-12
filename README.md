@@ -9,17 +9,20 @@ Small Go command-line timeblock tracker that:
 - prints a live countdown
 - sends a desktop notification when the block ends
 - asks what the result was and saves the session to `~/.worklog/entries/YYYY-MM-DD.json`
-- if interrupted, asks why, saves the session anyway, and appends `[INTERRUPTED]` to the result
+- if interrupted, asks why and saves the session with interruption metadata for later resume
+- can resume the most recent interrupted timeblock using the saved goal and remaining minutes
 
 ## Usage
 
 ```bash
 go run . help
 go run . start
+go run . resume
 go run . status
 go build .
 ./worklog help
 ./worklog start
+./worklog resume
 ./worklog status
 ```
 
