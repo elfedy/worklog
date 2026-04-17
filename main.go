@@ -222,7 +222,10 @@ func runTimeblock(reader *bufio.Reader, entriesDir string, goal string, duration
 	for {
 		select {
 		case <-interrupts:
-			fmt.Print("\rTimeblock interrupted.               \n")
+			endedAt := time.Now()
+			elapsedMinutes := int(endedAt.Sub(startedAt) / time.Minute)
+
+			fmt.Printf("\rTimeblock interrupted at %d minutes.               \n", elapsedMinutes)
 
 			fmt.Println()
 			fmt.Print("Why was this interrupted? ")
@@ -238,9 +241,6 @@ func runTimeblock(reader *bufio.Reader, entriesDir string, goal string, duration
 				fmt.Fprintln(os.Stderr, "interruption reason cannot be empty")
 				os.Exit(1)
 			}
-
-			endedAt := time.Now()
-			elapsedMinutes := int(endedAt.Sub(startedAt) / time.Minute)
 
 			entry := timeblockEntry{
 				Goal:                   goal,
