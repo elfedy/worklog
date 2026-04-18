@@ -83,7 +83,7 @@ func runStart() {
 		todayMinutes += entry.DurationMinutes
 	}
 
-	fmt.Printf("Today: %d/%d minutes worked\n", todayMinutes, config.MinutesPerDay)
+	fmt.Printf("Today: %d minutes worked\n", todayMinutes)
 
 	fmt.Print("What do you want to achieve in this timeblock? ")
 	goal, err := reader.ReadString('\n')
@@ -342,7 +342,7 @@ func runStatus() {
 		todayMinutes += entry.DurationMinutes
 	}
 
-	fmt.Printf("Today: %d/%d minutes worked\n", todayMinutes, config.MinutesPerDay)
+	fmt.Printf("Today: %d minutes worked\n", todayMinutes)
 
 	if len(todayEntries) == 0 {
 		fmt.Println("No entries logged today.")

@@ -10,16 +10,14 @@ import (
 )
 
 type worklogConfig struct {
-	MinutesPerDay int    `toml:"minutes_per_day"`
-	TimeSets      []int  `toml:"time_sets"`
-	EntriesDir    string `toml:"entries_dir"`
+	TimeSets   []int  `toml:"time_sets"`
+	EntriesDir string `toml:"entries_dir"`
 }
 
 func defaultWorklogConfig() worklogConfig {
 	return worklogConfig{
-		MinutesPerDay: 300,
-		TimeSets:      []int{30, 60, 90},
-		EntriesDir:    "entries",
+		TimeSets:   []int{30, 60, 90},
+		EntriesDir: "entries",
 	}
 }
 
@@ -39,14 +37,6 @@ func loadWorklogConfig(worklogDir string) (worklogConfig, error) {
 	parsed := worklogConfig{}
 	if unmarshalErr := toml.Unmarshal(configBytes, &parsed); unmarshalErr != nil {
 		return config, unmarshalErr
-	}
-
-	if parsed.MinutesPerDay != 0 {
-		if parsed.MinutesPerDay <= 0 {
-			return config, fmt.Errorf("minutes_per_day must be greater than zero")
-		}
-
-		config.MinutesPerDay = parsed.MinutesPerDay
 	}
 
 	if len(parsed.TimeSets) > 0 {
