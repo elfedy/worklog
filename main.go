@@ -21,6 +21,8 @@ func main() {
 	}
 
 	switch os.Args[1] {
+	case "add":
+		runAdd(os.Args[2:])
 	case "start":
 		runStart()
 	case "resume":
@@ -45,11 +47,80 @@ func printHelp() {
 	fmt.Println("  worklog <command>")
 	fmt.Println()
 	fmt.Println("Available Commands:")
+	fmt.Println("  add     Add a completed entry")
 	fmt.Println("  start   Start a new timeblock")
 	fmt.Println("  resume  Resume the last interrupted timeblock")
 	fmt.Println("  status  Show current status")
 	fmt.Println("  summary Show entries for a period or date range, optionally filtered by text")
 	fmt.Println("  help    Show this help menu")
+}
+
+func runAdd(args []string) {
+	if len(args) < 2 || len(args) > 3 {
+		fmt.Fprintln(os.Stderr, "usage: worklog add <minutes> <goal> [result]")
+		os.Exit(1)
+	}
+
+	durationMinutes, parseErr := strconv.Atoi(strings.TrimSpace(args[0]))
+	if parseErr != nil {
+		fmt.Fprintf(os.Stderr, "invalid minutes %q\n", args[0])
+		os.Exit(1)
+	}
+
+	if durationMinutes <= 0 {
+		fmt.Fprintln(os.Stderr, "minutes must be greater than zero")
+		os.Exit(1)
+	}
+
+	goal := strings.TrimSpace(args[1])
+	if goal == "" {
+		fmt.Fprintln(os.Stderr, "goal cannot be empty")
+		os.Exit(1)
+	}
+
+	result := goal
+	if len(args) == 3 {
+		result = strings.TrimSpace(args[2])
+		if result == "" {
+			fmt.Fprintln(os.Stderr, "result cannot be empty")
+			os.Exit(1)
+		}
+	}
+
+	homeDir, homeErr := os.UserHomeDir()
+	if homeErr != nil {
+		fmt.Fprintf(os.Stderr, "failed to resolve home directory: %v\n", homeErr)
+		os.Exit(1)
+	}
+
+	worklogDir := filepath.Join(homeDir, ".worklog")
+	config, configErr := loadWorklogConfig(worklogDir)
+	if configErr != nil {
+		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", configErr)
+		os.Exit(1)
+	}
+
+	entriesDir := resolveEntriesDir(worklogDir, config)
+	endedAt := time.Now()
+	startedAt := endedAt.Add(-time.Duration(durationMinutes) * time.Minute)
+	entry := timeblockEntry{
+		Goal:                   goal,
+		Result:                 result,
+		Interrupted:            false,
+		PlannedDurationMinutes: durationMinutes,
+		DurationMinutes:        durationMinutes,
+		DurationLabel:          fmt.Sprintf("%d minutes", durationMinutes),
+		StartedAt:              startedAt,
+		EndedAt:                endedAt,
+	}
+
+	entriesPath := filepath.Join(entriesDir, startedAt.Format("2006-01-02")+".json")
+	if saveErr := saveEntry(entriesDir, startedAt, entry); saveErr != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", saveErr)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Saved entry to %s\n", entriesPath)
 }
 
 func runStart() {

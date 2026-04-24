@@ -16,6 +16,8 @@ Small Go command-line timeblock tracker that:
 
 ```bash
 go run . help
+go run . add 30 "Write release notes"
+go run . add 30 "Write release notes" "Finished draft for v1.2"
 go run . start
 go run . resume
 go run . status
@@ -25,6 +27,8 @@ go run . summary 2026-04-01 2026-04-12
 go run . summary 2026-04-01 2026-04-12 deploy
 go build .
 ./worklog help
+./worklog add 30 "Write release notes"
+./worklog add 30 "Write release notes" "Finished draft for v1.2"
 ./worklog start
 ./worklog resume
 ./worklog status
@@ -33,6 +37,12 @@ go build .
 ./worklog summary 2026-04-01 2026-04-12
 ./worklog summary 2026-04-01 2026-04-12 deploy
 ```
+
+`add` accepts:
+
+- a required positive integer minute count
+- a required `goal`
+- an optional `result`; if omitted, the CLI stores the `goal` text as the `result`
 
 `summary` accepts:
 
