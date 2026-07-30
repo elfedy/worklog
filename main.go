@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -14,6 +15,131 @@ import (
 	"github.com/gen2brain/beeep"
 )
 
+type commandHelp struct {
+	name      string
+	summary   string
+	usage     []string
+	arguments []string
+	prompts   []string
+	notes     []string
+	examples  []string
+}
+
+var worklogCommands = []commandHelp{
+	{
+		name:    "add",
+		summary: "Add a completed entry",
+		usage: []string{
+			"worklog add <minutes> <goal> [result]",
+		},
+		arguments: []string{
+			"<minutes>  Required positive integer. Number of minutes the completed work took.",
+			"<goal>     Required text. The intended outcome or task description.",
+			"[result]   Optional text. What happened; defaults to <goal> when omitted.",
+		},
+		examples: []string{
+			`worklog add 30 "Write release notes"`,
+			`worklog add 30 "Write release notes" "Finished draft for v1.2"`,
+		},
+	},
+	{
+		name:    "start",
+		summary: "Start a new timeblock",
+		usage: []string{
+			"worklog start",
+		},
+		arguments: []string{
+			"None. This command asks for the goal and duration interactively.",
+		},
+		prompts: []string{
+			"goal                  Required non-empty text describing what the timeblock should achieve.",
+			"duration              Choose one configured time set, or choose Custom and enter positive minutes.",
+			"result                Required non-empty text saved when the timer completes.",
+			"interruption reason   Required non-empty text saved when the timer is interrupted.",
+		},
+		notes: []string{
+			"Configured time sets come from ~/.worklog/config.toml, or default to 30, 60, and 90 minutes.",
+			"Interrupting the timer asks for an interruption reason and saves the entry as interrupted.",
+		},
+		examples: []string{
+			"worklog start",
+		},
+	},
+	{
+		name:    "resume",
+		summary: "Resume the last interrupted timeblock",
+		usage: []string{
+			"worklog resume",
+		},
+		arguments: []string{
+			"None. This command resumes the most recent interrupted entry.",
+		},
+		prompts: []string{
+			"result                Required non-empty text saved when the resumed timer completes.",
+			"interruption reason   Required non-empty text saved when the resumed timer is interrupted.",
+		},
+		notes: []string{
+			"The command uses the saved goal and remaining minutes from the last interrupted entry.",
+		},
+		examples: []string{
+			"worklog resume",
+		},
+	},
+	{
+		name:    "status",
+		summary: "Show current status",
+		usage: []string{
+			"worklog status",
+		},
+		arguments: []string{
+			"None.",
+		},
+		notes: []string{
+			"Prints total minutes worked today and all entries logged today.",
+		},
+		examples: []string{
+			"worklog status",
+		},
+	},
+	{
+		name:    "summary",
+		summary: "Show entries for a period or date range, optionally filtered by text",
+		usage: []string{
+			"worklog summary <week|month|year> [filter]",
+			"worklog summary <YYYY-MM-DD> <YYYY-MM-DD> [filter]",
+		},
+		arguments: []string{
+			"<week|month|year>  Required period shortcut for the current local week, month, or year. Week starts Monday.",
+			"<YYYY-MM-DD>       Required start date when using a date range; inclusive.",
+			"<YYYY-MM-DD>       Required end date when using a date range; inclusive.",
+			"[filter]           Optional text matched against entry goal or result. Quote it if it contains spaces.",
+		},
+		examples: []string{
+			"worklog summary week",
+			"worklog summary week deploy",
+			"worklog summary 2026-04-01 2026-04-12",
+			"worklog summary 2026-04-01 2026-04-12 deploy",
+		},
+	},
+	{
+		name:    "help",
+		summary: "Show this help menu or command-specific help",
+		usage: []string{
+			"worklog help",
+			"worklog help <command>",
+			"worklog <command> --help",
+		},
+		arguments: []string{
+			"[command]  Optional command name: add, start, resume, status, summary, or help.",
+		},
+		examples: []string{
+			"worklog help",
+			"worklog help add",
+			"worklog summary --help",
+		},
+	},
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		printHelp()
@@ -22,42 +148,178 @@ func main() {
 
 	switch os.Args[1] {
 	case "add":
+		if wantsCommandHelp(os.Args[2:]) {
+			printCommandHelp("add", os.Stdout)
+			return
+		}
+
 		runAdd(os.Args[2:])
 	case "start":
+		if wantsCommandHelp(os.Args[2:]) {
+			printCommandHelp("start", os.Stdout)
+			return
+		}
+
+		if len(os.Args[2:]) > 0 {
+			printCommandUsageError("start", "start does not accept arguments")
+			os.Exit(1)
+		}
+
 		runStart()
 	case "resume":
+		if wantsCommandHelp(os.Args[2:]) {
+			printCommandHelp("resume", os.Stdout)
+			return
+		}
+
+		if len(os.Args[2:]) > 0 {
+			printCommandUsageError("resume", "resume does not accept arguments")
+			os.Exit(1)
+		}
+
 		runResume()
 	case "status":
+		if wantsCommandHelp(os.Args[2:]) {
+			printCommandHelp("status", os.Stdout)
+			return
+		}
+
+		if len(os.Args[2:]) > 0 {
+			printCommandUsageError("status", "status does not accept arguments")
+			os.Exit(1)
+		}
+
 		runStatus()
 	case "summary":
+		if wantsCommandHelp(os.Args[2:]) {
+			printCommandHelp("summary", os.Stdout)
+			return
+		}
+
 		runSummary(os.Args[2:])
 	case "help", "-h", "--help":
-		printHelp()
+		runHelp(os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand %q\n\n", os.Args[1])
-		printHelp()
+		printRootHelp(os.Stderr)
 		os.Exit(1)
 	}
 }
 
 func printHelp() {
-	fmt.Println("worklog")
-	fmt.Println()
-	fmt.Println("Usage:")
-	fmt.Println("  worklog <command>")
-	fmt.Println()
-	fmt.Println("Available Commands:")
-	fmt.Println("  add     Add a completed entry")
-	fmt.Println("  start   Start a new timeblock")
-	fmt.Println("  resume  Resume the last interrupted timeblock")
-	fmt.Println("  status  Show current status")
-	fmt.Println("  summary Show entries for a period or date range, optionally filtered by text")
-	fmt.Println("  help    Show this help menu")
+	printRootHelp(os.Stdout)
+}
+
+func runHelp(args []string) {
+	if len(args) == 0 {
+		printRootHelp(os.Stdout)
+		return
+	}
+
+	if wantsCommandHelp(args) {
+		printCommandHelp("help", os.Stdout)
+		return
+	}
+
+	if len(args) > 1 {
+		printCommandUsageError("help", "help accepts at most one command name")
+		os.Exit(1)
+	}
+
+	if !printCommandHelp(args[0], os.Stdout) {
+		fmt.Fprintf(os.Stderr, "unknown help topic %q\n\n", args[0])
+		printRootHelp(os.Stderr)
+		os.Exit(1)
+	}
+}
+
+func printRootHelp(writer io.Writer) {
+	fmt.Fprintln(writer, "worklog")
+	fmt.Fprintln(writer)
+	fmt.Fprintln(writer, "Usage:")
+	fmt.Fprintln(writer, "  worklog <command> [arguments]")
+	fmt.Fprintln(writer, "  worklog help <command>")
+	fmt.Fprintln(writer)
+	fmt.Fprintln(writer, "Available Commands:")
+	for _, command := range worklogCommands {
+		fmt.Fprintf(writer, "  %-7s %s\n", command.name, command.summary)
+	}
+	fmt.Fprintln(writer)
+	fmt.Fprintln(writer, `Run "worklog help <command>" for command-specific arguments and examples.`)
+}
+
+func printCommandHelp(commandName string, writer io.Writer) bool {
+	for _, command := range worklogCommands {
+		if command.name != commandName {
+			continue
+		}
+
+		fmt.Fprintf(writer, "worklog %s\n", command.name)
+		fmt.Fprintln(writer)
+		fmt.Fprintln(writer, command.summary)
+		fmt.Fprintln(writer)
+		fmt.Fprintln(writer, "Usage:")
+		for _, usage := range command.usage {
+			fmt.Fprintf(writer, "  %s\n", usage)
+		}
+
+		if len(command.arguments) > 0 {
+			fmt.Fprintln(writer)
+			fmt.Fprintln(writer, "Arguments:")
+			for _, argument := range command.arguments {
+				fmt.Fprintf(writer, "  %s\n", argument)
+			}
+		}
+
+		if len(command.prompts) > 0 {
+			fmt.Fprintln(writer)
+			fmt.Fprintln(writer, "Prompts:")
+			for _, prompt := range command.prompts {
+				fmt.Fprintf(writer, "  %s\n", prompt)
+			}
+		}
+
+		if len(command.notes) > 0 {
+			fmt.Fprintln(writer)
+			fmt.Fprintln(writer, "Notes:")
+			for _, note := range command.notes {
+				fmt.Fprintf(writer, "  %s\n", note)
+			}
+		}
+
+		if len(command.examples) > 0 {
+			fmt.Fprintln(writer)
+			fmt.Fprintln(writer, "Examples:")
+			for _, example := range command.examples {
+				fmt.Fprintf(writer, "  %s\n", example)
+			}
+		}
+
+		return true
+	}
+
+	return false
+}
+
+func printCommandUsageError(commandName string, message string) {
+	fmt.Fprintln(os.Stderr, message)
+	fmt.Fprintln(os.Stderr)
+	if !printCommandHelp(commandName, os.Stderr) {
+		printRootHelp(os.Stderr)
+	}
+}
+
+func wantsCommandHelp(args []string) bool {
+	if len(args) != 1 {
+		return false
+	}
+
+	return args[0] == "help" || args[0] == "-h" || args[0] == "--help"
 }
 
 func runAdd(args []string) {
 	if len(args) < 2 || len(args) > 3 {
-		fmt.Fprintln(os.Stderr, "usage: worklog add <minutes> <goal> [result]")
+		printCommandUsageError("add", "add requires <minutes> and <goal>, with optional [result]")
 		os.Exit(1)
 	}
 
@@ -426,14 +688,14 @@ func runStatus() {
 }
 
 func runSummary(args []string) {
-	homeDir, homeErr := os.UserHomeDir()
-	if homeErr != nil {
-		fmt.Fprintf(os.Stderr, "failed to resolve home directory: %v\n", homeErr)
+	if len(args) < 1 || len(args) > 3 {
+		printCommandUsageError("summary", "summary requires a period shortcut or an inclusive date range")
 		os.Exit(1)
 	}
 
-	if len(args) < 1 || len(args) > 3 {
-		fmt.Fprintln(os.Stderr, "usage: worklog summary <week|month|year> [filter] or worklog summary <YYYY-MM-DD> <YYYY-MM-DD> [filter]")
+	homeDir, homeErr := os.UserHomeDir()
+	if homeErr != nil {
+		fmt.Fprintf(os.Stderr, "failed to resolve home directory: %v\n", homeErr)
 		os.Exit(1)
 	}
 

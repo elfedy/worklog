@@ -16,6 +16,8 @@ Small Go command-line timeblock tracker that:
 
 ```bash
 go run . help
+go run . help add
+go run . summary --help
 go run . add 30 "Write release notes"
 go run . add 30 "Write release notes" "Finished draft for v1.2"
 go run . start
@@ -27,6 +29,8 @@ go run . summary 2026-04-01 2026-04-12
 go run . summary 2026-04-01 2026-04-12 deploy
 go build .
 ./worklog help
+./worklog help add
+./worklog summary --help
 ./worklog add 30 "Write release notes"
 ./worklog add 30 "Write release notes" "Finished draft for v1.2"
 ./worklog start
@@ -37,6 +41,8 @@ go build .
 ./worklog summary 2026-04-01 2026-04-12
 ./worklog summary 2026-04-01 2026-04-12 deploy
 ```
+
+Every command exposes command-specific help through `worklog help <command>` or `worklog <command> --help`.
 
 `add` accepts:
 
